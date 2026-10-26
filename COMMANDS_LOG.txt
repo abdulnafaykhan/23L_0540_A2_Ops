@@ -256,3 +256,46 @@ Rationale:
   - Lists running containers and active volumes.
   - Gracefully stops, removes the container, and purges the volume for clean resource teardown.
 ================================================================================
+[COMMAND 27]
+Command:
+  docker compose ps
+  docker exec visionguard_web whoami
+  Test-NetConnection -ComputerName 127.0.0.1 -Port 5432
+Rationale:
+  Executes Sub-task 6.2 and 6.3 Verification:
+  - Confirms both 'visionguard_web' and 'visionguard_db' services are healthy and running.
+  - Confirms web application process executes as non-root user 'appuser' (UID 1000).
+  - Proves that the PostgreSQL database publishes no external host port (TcpTestSucceeded : False) and is accessible strictly over Compose's internal network.
+================================================================================
+
+[COMMAND 28]
+Command:
+  docker run --rm -e MODEL_PATH=nonexistent_weights.keras 23l_0540_a2_ops-web:latest python inference.py
+  docker run --rm -e MODEL_PATH=champion_mobilenetv2_best.keras 23l_0540_a2_ops-web:latest python -c "import inference; print('[FIX VERIFIED] Model loaded successfully:', inference.CHAMPION_MODEL is not None)"
+Rationale:
+  Executes Sub-task 6.5 (Operations and Troubleshooting Drill):
+  - Intentionally injects failure by configuring MODEL_PATH to a nonexistent file.
+  - Captures runtime log excerpt diagnosing the failure: 'FileNotFoundError: File not found: filepath=nonexistent_weights.keras'.
+  - Applies and verifies the fix by restoring the valid model path, achieving '[FIX VERIFIED] Model loaded successfully: True'.
+================================================================================
+
+[COMMAND 29]
+Command:
+  git add .
+  git commit -m "feat: complete VisionGuard pipeline, Flask web app, Docker multi-service stack, and CI workflow"
+  git branch -M main
+  git remote add origin https://dagshub.com/ankhanburki/23L_0540_A2_Ops.git
+  git push -u origin main
+Rationale:
+  Commits all project source files, Dockerfiles, compose stacks, templates, and CI workflows to Git,
+  and publishes the full codebase to the remote repository.
+================================================================================
+[COMMAND 30]
+Command:
+  Created test_cloud_api.py
+Rationale:
+  Implements Task 7 client verification script:
+  - Executes GET request against live cloud domain '/health' endpoint.
+  - Submits a multipart test image via POST to '/api/predict'.
+  - Validates end-to-end cloud roundtrip latency, HTTP status code (200), and parses JSON inference response.
+================================================================================

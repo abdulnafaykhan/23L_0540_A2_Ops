@@ -1,9 +1,10 @@
 # VisionGuard: AI vs Real Image Classification & Deployment
 
-![VisionGuard CI](https://github.com/ankhanburki/23L_0540_A2_Ops/actions/workflows/ci.yml/badge.svg)
+![VisionGuard CI](https://github.com/abdulnafaykhan/23L_0540_A2_Ops/actions/workflows/ci.yml/badge.svg)
 
 **Student Roll Number:** 23L-0540  
 **Project Name:** 23L_0540_A2_Ops  
+**GitHub Repository:** [https://github.com/abdulnafaykhan/23L_0540_A2_Ops](https://github.com/abdulnafaykhan/23L_0540_A2_Ops)  
 **DagsHub Project:** [https://dagshub.com/ankhanburki/23L_0540_A2_Ops](https://dagshub.com/ankhanburki/23L_0540_A2_Ops)  
 
 ---
