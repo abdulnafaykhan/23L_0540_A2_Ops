@@ -1,0 +1,53 @@
+# Task 6.3: Multi-service Compose Stack (Web App + Database)
+services:
+  web:
+    build: .
+    container_name: visionguard_web
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - FLASK_DEBUG=0
+      - MODEL_PATH=champion_mobilenetv2_best.keras
+      - MODEL_NAME=champion_mobilenetv2
+      - THRESHOLD=0.5
+      - DATABASE_PATH=visionguard.db
+      - DB_HOST=db
+      - DB_USER=${DB_USER:-visionuser}
+      - DB_PASSWORD=${DB_PASSWORD:-visionpass123}
+      - DB_NAME=${DB_NAME:-visionguard_db}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - visionguard_net
+
+  db:
+    image: postgres:15-alpine
+    container_name: visionguard_db
+    restart: unless-stopped
+    # CRUCIAL (Sub-task 6.3): NO external ports published to outside!
+    # Database is strictly accessible only through Compose's internal network by service name 'db'.
+    environment:
+      POSTGRES_USER: ${DB_USER:-visionuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-visionpass123}
+      POSTGRES_DB: ${DB_NAME:-visionguard_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U visionuser -d visionguard_db || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - visionguard_net
+
+volumes:
+  postgres_data:
+    name: visionguard_postgres_data
+
+networks:
+  visionguard_net:
+    name: visionguard_internal_network

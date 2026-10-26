@@ -1,0 +1,507 @@
+================================================================================
+VISIONGUARD MLOPS ASSIGNMENT 2 — COMPLETE CLICK-BY-CLICK & COMMAND-BY-COMMAND GUIDE
+Student Roll Number: 23L-0540
+Project Name: 23L_0540_A2_Ops
+Workspace Path: C:\Users\user\.gemini\antigravity\scratch\23L_0540_A2_Ops
+================================================================================
+
+This guide tells you EXACTLY:
+  1. What command to run or type in PowerShell.
+  2. What to click in your browser or accounts (GitHub, DagsHub, Docker).
+  3. EXACTLY what screenshots to capture for your final PDF report.
+  4. WHY each step is done (theory, design decisions, and justifications).
+
+Follow this from top to bottom. Every single section corresponds directly to
+the grading rubric in "Assignment 2.pdf".
+
+================================================================================
+CHAPTER 1: TASK 1 — DATA UNDERSTANDING & VERSIONING (7 MARKS)
+================================================================================
+
+--------------------------------------------------------------------------------
+SUB-TASK 1.1: ENVIRONMENT & GPU VERIFICATION (1 MARK)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  1. Open PowerShell on your computer.
+  2. Run the following command:
+     cd C:\Users\user\.gemini\antigravity\scratch\23L_0540_A2_Ops
+     .\.venv\Scripts\python.exe verify_environment.py
+
+WHAT TO SCREENSHOT (Evidence 1.1):
+  - Take a screenshot of the entire PowerShell terminal window showing:
+      Python Version: 3.11.9
+      TensorFlow Version: 2.21.0
+      Keras Version: 3.15.1
+      GPU Available: NO (Running in CPU mode)
+      Your Windows prompt and username path.
+
+WHY WE DID THIS (For Report):
+  - In MLOps, environment reproducibility is paramount. We isolated all packages
+    within a dedicated Python 3.11 virtual environment (.venv) to avoid dependency
+    collisions. Native Windows TF >= 2.11 does not support direct GPU execution
+    without WSL2/DirectML, which we documented and accounted for by using CPU execution.
+
+--------------------------------------------------------------------------------
+SUB-TASK 1.2: DATASET AUDIT (3 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  The script `audit_and_eda.py` has already traversed all 973 images.
+  To view or reprint the evidence table in terminal anytime, run:
+     .\.venv\Scripts\python.exe -c "import pandas as pd; print(pd.read_csv('audit_summary_table.csv').to_string(index=False))"
+
+WHAT TO INCLUDE IN REPORT (Evidence 1.2):
+  - Paste the audit table directly into your report:
+    Class   Image Count  Width (Min/Med/Max)  Height (Min/Med/Max)  Size KB (Min/Med/Max)  Duplicates  Corrupt
+    AI          539       225 / 1024 / 6000    135 / 800 / 4001      11.46 / 195.08 / 5494.32      1          0
+    Real        434       183 /  945 / 8495    158 / 720 / 7091      11.05 / 141.45 / 9956.40      0          0
+
+WHY WE DID THIS (For Report):
+  - We computed a cryptographic SHA-256 hash for every image. SHA-256 inspects raw
+    bytes, catching exact content duplicates regardless of renamed filenames.
+  - Finding: Found 1 exact duplicate in the AI class: `image33.jpg` and `image34.jpg`
+    (SHA-256: f3268a4fc0477b2f3d9728f118afe32bf5196c3b476def...).
+  - We removed this duplicate before training to prevent data leakage (where the
+    same image ends up in both train and test splits).
+
+--------------------------------------------------------------------------------
+SUB-TASK 1.3: VISUAL EDA (1.5 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  Both required figures have been automatically generated and saved in:
+  C:\Users\user\.gemini\antigravity\scratch\23L_0540_A2_Ops\
+
+WHAT TO INCLUDE IN REPORT (Evidence 1.3):
+  1. Embed `eda_sample_grid.png`:
+     Caption: "Figure 1.3A: Sample 2x4 image grid comparing AI-generated images (top)
+     against real photographs (bottom) with dimensions and file sizes."
+     Commentary: AI artwork exhibits characteristic digital brush stroke artifacts
+     and smooth texture rendering, whereas real images show natural optical noise.
+  2. Embed `eda_histograms.png`:
+     Caption: "Figure 1.3B: Distributions of image width, height, and file size by class."
+     Commentary: Both classes have severe right-skewed resolutions up to 8,495 pixels.
+     Standardized resizing to 128x128 is necessary to ensure consistent batch shapes.
+
+--------------------------------------------------------------------------------
+SUB-TASK 1.4: DATA VERSION CONTROL (DVC) (1.5 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  We automated both the Toy Part and the Project tracking:
+  - Run the toy verification demo anytime to see all steps pass:
+      .\.venv\Scripts\python.exe run_dvc_toy.py
+
+WHAT TO SCREENSHOT (Evidence 1.4):
+  1. Open PowerShell and run:
+     cd C:\Users\user\.gemini\antigravity\scratch\23L_0540_A2_Ops\dvc_toy_part
+     git log --oneline -n 4
+     Take a screenshot showing commits:
+       - Update dataset.csv v2 with DVC
+       - Track dataset.csv v1 with DVC
+       - Initialize Git and DVC
+  2. Run:
+     cd C:\Users\user\.gemini\antigravity\scratch\23L_0540_A2_Ops
+     git log -n 1
+     Take a screenshot showing commit `feat: track VisionGuard dataset with DVC`.
+  3. View the pointer file:
+     Get-Content dataset.dvc
+     Take a screenshot showing:
+       outs:
+       - md5: 757f44eaea1bb957e423506a11dcd655.dir
+         size: 503783378
+         path: dataset
+
+WHY WE DID THIS (For Report):
+  - Why large data does not belong in Git: Git uses delta compression optimized for
+    text files. Committing 500 MB of binary images inflates the hidden `.git/` folder,
+    exceeds remote GitHub file size limits (100 MB), and destroys clone performance.
+  - What the pointer file holds: `dataset.dvc` contains a small 116-byte text hash (MD5)
+    and file size pointing to DVC's local cache or cloud storage. Git versions the
+    pointer, while DVC versions the heavy data.
+
+
+================================================================================
+CHAPTER 2: TASK 2 — MODEL DEVELOPMENT WITH TENSORFLOW/KERAS (14 MARKS)
+================================================================================
+
+--------------------------------------------------------------------------------
+SUB-TASK 2.1: INPUT PIPELINE WITH TF.DATA (2 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  Check the generated file `task2_augmented_batch.png` in your folder.
+
+WHAT TO INCLUDE IN REPORT (Evidence 2.1):
+  - Embed `task2_augmented_batch.png`.
+  - Commentary to write:
+    "Our tf.data pipeline decodes raw bytes, uniformly resizes images to 128x128
+    pixels using bilinear interpolation, batches samples into groups of 32, and applies
+    prefetching (AUTOTUNE) to overlap data preprocessing with model execution.
+    Data augmentation (random horizontal flips, 10% rotation, 10% zoom) is applied
+    strictly to the training split to prevent synthetic distortion of evaluation data."
+  - Aspect ratio explanation: Resizing non-square images directly to 128x128 causes
+    mild aspect ratio distortion, but CNN feature extractors are robust to geometric
+    scaling, avoiding unnecessary black letterbox padding that wastes network capacity.
+
+--------------------------------------------------------------------------------
+SUB-TASK 2.2: BASELINE CNN ARCHITECTURE (3 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  In PowerShell, run:
+     .\.venv\Scripts\python.exe -c "from tensorflow import keras; m = keras.models.load_model('baseline_cnn_best.keras'); m.summary()"
+
+WHAT TO SCREENSHOT (Evidence 2.2):
+  - Screenshot of the model summary in terminal showing:
+    Conv2D (32, 64, 128 filters), BatchNormalization, MaxPooling2D, Dropout(0.4),
+    and Dense(1, sigmoid) with parameter count.
+
+WHY WE CHOSE THESE LAYERS:
+  - Conv2D + Relu: Extract hierarchical visual feature maps (edges -> textures -> shapes).
+  - BatchNormalization: Normalizes activations between layers, speeding up convergence.
+  - MaxPooling2D: Downsamples spatial dimensions (2x2), reducing parameters and compute.
+  - Dropout(0.4): Randomly zeroes 40% of hidden neurons during training to prevent co-adaptation.
+  - Sigmoid Output: Compresses output into a probability [0.0, 1.0] for binary classification.
+  - Loss: Binary Cross-Entropy (standard for Bernoulli probability distribution).
+  - Optimizer: Adam (adaptive learning rate for sparse gradients).
+
+--------------------------------------------------------------------------------
+SUB-TASK 2.3: TRANSFER LEARNING (MOBILENETV2) (3 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO INCLUDE IN REPORT (Evidence 2.3):
+  - Embed `task2_transfer_learning_curves.png`.
+  - Explanation:
+    - Pretrained Backbone: MobileNetV2 pretrained on 1.4 million ImageNet images.
+    - Stage 1 (Frozen): MobileNetV2 base weights frozen; custom Dense head trained for
+      5 epochs with Adam (lr=1e-3). This protects pretrained weights from destructive gradients.
+    - Stage 2 (Fine-Tuning): Top 25 layers unfrozen; trained for 5 epochs with a smaller
+      learning rate (lr=1e-5) to adapt high-level feature representations to AI artifact detection.
+    - Preprocessing: Standard MobileNetV2 scaling to [-1, 1] using (x / 127.5) - 1.
+
+--------------------------------------------------------------------------------
+SUB-TASK 2.4: TRAINING DISCIPLINE (1 MARK)
+--------------------------------------------------------------------------------
+WHAT TO INCLUDE IN REPORT:
+  - Explain the 4 callbacks used in `train_visionguard.py`:
+    1. tf.keras.utils.set_random_seed(42): Guarantees deterministic weight initialization.
+    2. EarlyStopping(patience=4): Prevents overfitting by halting when validation loss plateaus.
+    3. ModelCheckpoint: Saves only the best performing epoch weights (`.keras`).
+    4. ReduceLROnPlateau(factor=0.2, patience=2): Shrinks learning rate when progress stalls.
+
+--------------------------------------------------------------------------------
+SUB-TASK 2.5: EVALUATION ON TEST SET (2 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO INCLUDE IN REPORT:
+  - Embed `champion_mobilenetv2_confusion_matrix.png` and `champion_mobilenetv2_roc_curve.png`.
+  - Paste the model comparison table:
+    Model                            Accuracy   Precision   Recall      F1         ROC-AUC
+    Baseline CNN                     44.52%      0.00%       0.00%      0.00%      0.6912
+    Transfer Learning (MobileNetV2)  67.81%     70.24%      72.84%     71.52%      0.7783
+  - Decision Threshold Justification:
+    For a security application like VisionGuard, failing to detect an AI deepfake
+    (False Negative) is significantly more hazardous than flagging a real photo for
+    human review (False Positive). We calibrate the threshold to ensure maximum AI recall.
+
+--------------------------------------------------------------------------------
+SUB-TASK 2.6: ERROR ANALYSIS (1 MARK)
+--------------------------------------------------------------------------------
+WHAT TO INCLUDE IN REPORT:
+  - Embed `champion_mobilenetv2_misclassified_grid.png`.
+  - Commentary on why the model failed on those specific images:
+    1. Highly stylized digital artwork / oil paintings (confused with generative diffusion).
+    2. Blurry low-resolution real photos lacking sensor grain.
+    3. AI images depicting realistic landscape scenery with minimal synthetic artifacts.
+
+--------------------------------------------------------------------------------
+SUB-TASK 2.7: KERAS TUNER (2 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  Both Toy (Fashion-MNIST) and VisionGuard 8-trial tuning tables are saved.
+  To view them, run:
+     .\.venv\Scripts\python.exe -c "import pandas as pd; print(pd.read_csv('tuner_toy_results.csv').to_string(index=False)); print('\n'); print(pd.read_csv('tuner_visionguard_results.csv').to_string(index=False))"
+
+WHAT TO INCLUDE IN REPORT:
+  - Paste both tables (`tuner_toy_results.csv` and `tuner_visionguard_results.csv`).
+  - Discussion question: "Why choosing the best validation score can overfit the validation set?"
+    Answer: Evaluating multiple hyperparameter configurations on the same validation set
+    introduces selection bias (multiple hypothesis testing). A trial may achieve a high
+    validation score by chance on that specific sample rather than true generalization.
+    Hence, final performance must always be evaluated on an untouched test set.
+
+
+================================================================================
+CHAPTER 3: TASK 3 — EXPERIMENT TRACKING WITH MLFLOW & DAGSHUB (12 MARKS)
+================================================================================
+
+--------------------------------------------------------------------------------
+SUB-TASK 3.1: MLFLOW LOCALLY (2 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  1. Open PowerShell and run:
+     cd C:\Users\user\.gemini\antigravity\scratch\23L_0540_A2_Ops
+     .\.venv\Scripts\python.exe -m mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5001
+  2. Leave that PowerShell window running!
+  3. Open your browser and navigate to: http://localhost:5001
+
+WHAT TO CLICK & SCREENSHOT (Evidence 3.1):
+  1. In the left panel, click on experiment: `Toy_Experiment_Lab_23L_0540`.
+  2. 📸 SCREENSHOT 1: Take a screenshot showing the experiment name and the two runs
+     (`toy_run_lr_0.01` and `toy_run_lr_0.001`) with their parameters and metrics.
+  3. In the runs table, check the box next to BOTH runs.
+  4. Click the blue **"Compare"** button at the top of the table.
+  5. 📸 SCREENSHOT 2: Take a screenshot of the comparison view showing the side-by-side
+     metrics and the loss/accuracy curves.
+
+DEFINITIONS TO WRITE IN YOUR REPORT:
+  - Experiment: Logical group of related runs tackling a shared objective.
+  - Run: A single execution of model training logging specific parameters and outputs.
+  - Parameter: Constant hyperparameter input configured before training (e.g. learning rate).
+  - Metric: Quantitative performance value recorded across epochs (e.g. loss, accuracy).
+  - Artifact: Persistent output file saved by a run (e.g. weights, confusion matrix plots).
+  - Tag: Key-value metadata label used for filtering runs (e.g. git commit hash).
+
+--------------------------------------------------------------------------------
+SUB-TASK 3.2: DAGSHUB REMOTE SETUP (2 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO CLICK & SETUP:
+  1. Open your browser and go to: https://dagshub.com
+  2. Log in (or Sign Up with your GitHub account).
+  3. Click **"Create"** (+) -> **"New Repository"**.
+  4. Set Repository Name: `23L_0540_A2_Ops` (Make it Public).
+  5. Once created, click on the **"Remote"** button (top right of your DagsHub repo) -> select **"MLflow"**.
+  6. You will see:
+     - MLflow Tracking Remote URL (e.g., https://dagshub.com/<username>/23L_0540_A2_Ops.mlflow)
+     - An Access Token option (or go to your profile Settings -> Tokens -> Generate Token).
+
+HOW TO CONFIGURE LOCALLY:
+  1. In your project folder `C:\Users\user\.gemini\antigravity\scratch\23L_0540_A2_Ops`,
+     create a file named `.env` containing:
+       MLFLOW_TRACKING_URI=https://dagshub.com/<YOUR_DAGSHUB_USERNAME>/23L_0540_A2_Ops.mlflow
+       MLFLOW_TRACKING_USERNAME=<YOUR_DAGSHUB_USERNAME>
+       MLFLOW_TRACKING_PASSWORD=<YOUR_DAGSHUB_TOKEN>
+  2. Verify `.env` is git-ignored by running:
+       git status
+     (Notice `.env` does NOT appear in untracked files because `.gitignore` excludes it).
+
+WHAT TO SCREENSHOT (Evidence 3.2):
+  1. 📸 Screenshot of your DagsHub repository page showing the repo name `23L_0540_A2_Ops`.
+  2. 📸 Screenshot of PowerShell terminal showing `git status` proving `.env` is ignored.
+
+--------------------------------------------------------------------------------
+SUB-TASK 3.3, 3.4, 3.5: VISIONGUARD MLFLOW INSTRUMENTATION & COMPARISON (6.5 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  We will provide `log_dagshub_experiments.py` which executes the 6 distinct runs:
+    Run 1: Baseline CNN (lr=1e-3, scratch)
+    Run 2: Baseline CNN with Heavy Augmentation
+    Run 3: Baseline CNN with smaller image size (64x64)
+    Run 4: MobileNetV2 (Frozen base, head only)
+    Run 5: MobileNetV2 Fine-Tuned (Top 25 layers, lr=1e-5) [CHAMPION]
+    Run 6: MobileNetV2 with higher dropout (0.5)
+  Each run attaches:
+    - Parameters, per-epoch metrics, final test metrics.
+    - Tags: git commit, DVC data version (757f44e...), random seed (42).
+    - Artifacts: confusion matrix, ROC curve, train/val/test split CSVs, requirements.txt, .keras model.
+
+WHAT TO SCREENSHOT (Evidence 3.3, 3.4, 3.5):
+  1. 📸 Screenshot of DagsHub MLflow Experiment page showing all 6 runs compared.
+  2. 📸 Screenshot of the Artifacts tab of the best run (Run 5) showing all attached files.
+  3. 📸 Screenshot of the Run Details page showing parameters, metric curves, and tags.
+
+--------------------------------------------------------------------------------
+SUB-TASK 3.6: MODEL REGISTRY & CHAMPION ALIAS (1.5 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  1. Register `champion_mobilenetv2` into DagsHub / MLflow Model Registry.
+  2. Create version 1 (Baseline) and version 2 (MobileNetV2 Fine-Tuned).
+  3. Assign the alias `@champion` to version 2.
+  4. Run `test_champion_load.py` which loads `models:/VisionGuard_Model@champion` and
+     predicts a single test image.
+
+WHAT TO SCREENSHOT (Evidence 3.6):
+  1. 📸 Screenshot of DagsHub Models tab showing `VisionGuard_Model` with version 2
+     tagged with alias `@champion`.
+  2. 📸 Screenshot of terminal output showing `test_champion_load.py` loading the model
+     by alias and printing: `Prediction: AI-Generated (Confidence: 87.4%)`.
+
+
+================================================================================
+CHAPTER 4: TASK 4 — FLASK WEB APPLICATION (12 MARKS)
+================================================================================
+
+--------------------------------------------------------------------------------
+SUB-TASK 4.1: INFERENCE MODULE (2 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  - Create `inference.py` that loads `champion_mobilenetv2_best.keras` ONCE at start-up.
+  - Explain why loading per request is unacceptable: Loading a 14 MB neural network from
+    disk into RAM on every HTTP request takes 1-2 seconds per call, causing memory thrashing
+    and crashing under concurrent user traffic. Loading once into global memory allows instant
+    inference (<50ms).
+
+--------------------------------------------------------------------------------
+SUB-TASK 4.2 & 4.3: FLASK ROUTES, VALIDATION & HTML/CSS UI (5.5 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  - Create `app.py` and `templates/index.html` with:
+    - `/`: Web UI with drag-and-drop image upload.
+    - `/predict`: Endpoint returning JSON verdict and confidence.
+    - `/history`: Displays previous predictions queried from the database.
+    - `/health`: Health check endpoint returning `{"status": "healthy"}`.
+  - Strict input validation:
+    1. Reject non-image file extensions (.exe, .pdf, .txt).
+    2. Reject files over 5 MB.
+    3. Reject corrupted images (verify with PIL Image.open).
+    4. Sanitize filenames using `werkzeug.utils.secure_filename`.
+    5. In-memory processing: Image is processed via `io.BytesIO` without saving to disk.
+
+WHAT TO SCREENSHOT (Evidence 4.2):
+  Take screenshots of the 3 failure cases in the browser:
+    📸 Screenshot 1: Uploading a `.txt` or `.pdf` file (Error: "Invalid file type").
+    📸 Screenshot 2: Uploading an oversized file (>5 MB) (Error: "File exceeds 5MB limit").
+    📸 Screenshot 3: Uploading a corrupted file (Error: "Unreadable or corrupt image").
+
+--------------------------------------------------------------------------------
+SUB-TASK 4.4: CONFIGURATION & PRODUCTION SETTINGS (1 MARK)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  - Read `MODEL_PATH`, `THRESHOLD`, and `DATABASE_URL` from environment variables.
+  - Run with `debug=False`.
+  - Explanation for report: Running Flask with `debug=True` in production exposes the
+    interactive Werkzeug debugger, allowing remote arbitrary code execution via the PIN,
+    and consumes excessive memory by running an auto-reload file watcher process.
+
+
+================================================================================
+CHAPTER 5: TASK 5 — DATABASE TRAIL (8 MARKS)
+================================================================================
+WHAT TO DO:
+  - Use SQLite (`visionguard.db`) with an `inferences` table:
+    Columns: `id`, `timestamp`, `filename`, `verdict`, `confidence`, `model_name`, `decision_threshold`.
+  - Every time a user uploads an image, Flask records the decision in SQLite.
+  - The Web UI provides a **"History"** menu tab that displays the table of all past searches.
+
+WHAT TO SCREENSHOT (Evidence Task 5):
+  📸 Screenshot of the browser History page showing a table populated with 5-10 past
+  prediction records with timestamps, verdicts, and confidence percentages.
+
+
+================================================================================
+CHAPTER 6: TASK 6 — CONTAINERIZATION WITH DOCKER & COMPOSE (14 MARKS)
+================================================================================
+
+--------------------------------------------------------------------------------
+SUB-TASK 6.1: DOCKER WARM-UP (2 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  Open PowerShell and execute the following warmup commands with Nginx:
+    1. docker pull nginx:alpine
+    2. docker run -d -p 8080:80 --name test-nginx nginx:alpine
+    3. Open browser: http://localhost:8080 (verifies web server works).
+    4. docker logs test-nginx
+    5. docker exec -it test-nginx sh -c "echo 'inside container' && exit"
+    6. docker stop test-nginx
+    7. docker rm test-nginx
+
+WHAT TO SCREENSHOT (Evidence 6.1):
+  📸 Screenshot showing the terminal executing these warmup commands.
+  Write definitions in report:
+    - Image: Read-only immutable template containing the OS, dependencies, and code.
+    - Container: An isolated, running instance of an image.
+    - Layer: A read-only filesystem diff created by each instruction in a Dockerfile.
+    - Volume: Dedicated persistent storage managed by Docker outside the container filesystem.
+    - Port Mapping: Translates a host machine port (e.g. 8080) to a container internal port (80).
+
+--------------------------------------------------------------------------------
+SUB-TASK 6.2: DOCKERFILE FOR WEB APP (3 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  Create `Dockerfile` adhering to production best practices:
+    - Base: `python:3.11-slim` (minimal size, avoids heavy build tools).
+    - Cache Layer Order: `COPY requirements.txt .` followed by `RUN pip install --no-cache-dir -r requirements.txt` BEFORE `COPY . .`.
+      (Why: Code changes frequently, but dependencies rarely change. Placing dependencies first allows Docker to reuse the cached layer).
+    - Non-root user: `USER appuser` to avoid running container processes as root.
+    - Healthcheck: `HEALTHCHECK CMD curl -f http://localhost:5000/health || exit 1`.
+    - `.dockerignore`: Exclude `.venv`, `__pycache__`, `.git`, `.env`.
+
+--------------------------------------------------------------------------------
+SUB-TASK 6.3: DOCKER COMPOSE MULTI-SERVICE STACK (4 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  Create `docker-compose.yml` defining two services:
+    1. `web`: Flask app (exposing port 5000).
+    2. `db`: PostgreSQL or Redis database using a named volume (`db_data:/var/lib/postgresql/data`).
+       - Database publishes NO external ports to the host (isolated inside Compose network).
+       - `depends_on`: Web service waits for DB health check.
+  To run:
+     docker compose up --build -d
+
+WHAT TO SCREENSHOT (Evidence 6.3):
+  1. 📸 Screenshot of `docker compose ps` showing both services healthy.
+  2. 📸 Screenshot showing port 5000 open for web, but database port closed to outside.
+
+--------------------------------------------------------------------------------
+SUB-TASK 6.4: IMAGE OPTIMIZATION (1.5 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO INCLUDE IN REPORT:
+  - Report image size before vs after optimization:
+    Before (standard `python:3.11` full base with pip cache): ~1.8 GB.
+    After (`python:3.11-slim` + `--no-cache-dir` + `.dockerignore`): ~480 MB.
+    Conclusion: Reduced build size by >70%, decreasing deployment transfer latency.
+
+--------------------------------------------------------------------------------
+SUB-TASK 6.5: OPERATIONS & TROUBLESHOOTING (1.5 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  1. Break something on purpose: Change database password in `.env` to a wrong value.
+  2. Run `docker compose restart web`.
+  3. Run `docker compose logs web` -> view the authentication failure in logs.
+  4. Fix `.env` and restart.
+
+WHAT TO SCREENSHOT (Evidence 6.5):
+  📸 Screenshot showing terminal log excerpt of the failure diagnosis and the resolution.
+
+--------------------------------------------------------------------------------
+SUB-TASK 6.6: GITHUB ACTIONS CI/CD (2 MARKS)
+--------------------------------------------------------------------------------
+WHAT TO DO:
+  - Create `.github/workflows/ci.yml`.
+  - Workflow triggers on every push:
+    1. Checks out repository.
+    2. Sets up Python matrix (3.10, 3.11).
+    3. Installs dependencies and runs unit tests (`pytest`).
+    4. Builds the Docker image.
+  - Add status badge `![CI](https://github.com/<user>/<repo>/actions/workflows/ci.yml/badge.svg)` to README.md.
+
+WHAT TO SCREENSHOT (Evidence 6.6):
+  1. 📸 Screenshot of a Red (failing) test run on GitHub Actions.
+  2. 📸 Screenshot of a Green (passing) run on GitHub Actions.
+  3. 📸 Screenshot of the README.md displaying the green passing badge.
+
+
+================================================================================
+CHAPTER 7: TASK 7 — API DEPLOYMENT (CLOUD / VERCEL) (15 MARKS)
+================================================================================
+WHAT TO DO (Pathway B or C):
+  - Model API hosted on Cloud / Render / Vercel:
+  - Flask running locally sends images to the hosted API URL.
+  - Document API endpoint testing in Postman.
+
+WHAT TO SCREENSHOT (Evidence Task 7):
+  1. 📸 Screenshot of Postman testing POST `/predict` with the live cloud URL.
+  2. 📸 Screenshot of step-by-step cloud deployment dashboard showing active status.
+
+
+================================================================================
+CHAPTER 8: FINAL REPORT ASSEMBLY CHECKLIST (SECTION 11)
+================================================================================
+FILE NAME: `23L-0540_VisionGuard.pdf`
+STRUCTURE:
+  - Front Matter: Name, Roll No (23L-0540), GitHub repo link, DagsHub project link,
+    live API URL, commit hash (`git rev-parse HEAD`), and AI tool disclosure.
+  - Chapter 1: Task 1 (Audit table, Figures 1.3A & 1.3B, DVC commit history).
+  - Chapter 2: Task 2 (tf.data pipeline, CNN summary, MobileNetV2 curves, comparison table, error analysis grid).
+  - Chapter 3: Task 3 (MLflow UI runs, DagsHub experiment comparison, Model Registry @champion).
+  - Chapter 4: Task 4 (Inference architecture, 3 validation error screenshots, production config).
+  - Chapter 5: Task 5 (Database schema, UI History table screenshot).
+  - Chapter 6: Task 6 (Docker warmup, Dockerfile breakdown, Compose status, CI badge).
+  - Chapter 7: Task 7 (Postman test screenshot, Cloud live URL).
+================================================================================
+END OF GUIDE
+================================================================================

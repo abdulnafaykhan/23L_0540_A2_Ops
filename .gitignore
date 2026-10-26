@@ -1,1 +1,12 @@
 /dataset
+.env
+.venv/
+__pycache__/
+*.pyc
+mlflow.db
+mlruns/
+dvc_remote_storage/
+dvc_toy_part/
+tuner_toy_dir/
+tuner_visionguard_dir/
+visionguard.db
